@@ -33,6 +33,7 @@ class CVCalendarContentViewController: UIViewController {
     }
     
     var pageLoadingEnabled = true
+    var presentationEnabled = true
     var lastContentOffset: CGFloat = 0
     var direction: CVScrollDirection = .None
     
@@ -46,10 +47,10 @@ class CVCalendarContentViewController: UIViewController {
         
         scrollView.contentSize = CGSizeMake(frame.width * 3, frame.height)
         scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.layer.masksToBounds = true
         scrollView.pagingEnabled = true
         scrollView.delegate = self
-        
-        calendarView.addSubview(scrollView)
     }
     
     required init(coder aDecoder: NSCoder) {
@@ -66,7 +67,7 @@ extension CVCalendarContentViewController {
             scrollView.removeAllSubviews()
             scrollView.contentSize = CGSizeMake(frame.size.width * 3, frame.size.height)
         }
-
+        
         calendarView.hidden = false
     }
 }
@@ -140,6 +141,65 @@ extension CVCalendarContentViewController {
     
     func matchedDays(lhs: Date, _ rhs: Date) -> Bool {
         return (lhs.year == rhs.year && lhs.month == rhs.month && lhs.day == rhs.day)
+    }
+}
+
+// MARK: - AutoLayout Management
+
+extension CVCalendarContentViewController {
+    private func layoutViews(views: [UIView], toHeight height: CGFloat) {
+        self.scrollView.frame.size.height = height
+        self.calendarView.layoutIfNeeded()
+        
+        for view in views {
+            view.layoutIfNeeded()
+        }
+    }
+    
+    func updateHeight(height: CGFloat, animated: Bool) {
+        var viewsToLayout = [UIView]()
+        if let calendarSuperview = calendarView.superview {
+            for constraintIn in calendarSuperview.constraints() {
+                if let constraint = constraintIn as? NSLayoutConstraint {
+                    if let firstItem = constraint.firstItem as? UIView, let secondItem = constraint.secondItem as? CalendarView {
+                        viewsToLayout.append(firstItem)
+                    }
+                }
+            }
+        }
+        
+        
+        
+        for constraintIn in calendarView.constraints() {
+            if let constraint = constraintIn as? NSLayoutConstraint where constraint.firstAttribute == NSLayoutAttribute.Height {
+                calendarView.layoutIfNeeded()
+                constraint.constant = height
+                if animated {
+                    UIView.animateWithDuration(0.2, delay: 0, options: UIViewAnimationOptions.CurveLinear, animations: {
+                        self.layoutViews(viewsToLayout, toHeight: height)
+                        }) { _ in
+                            self.presentedMonthView.frame.size = self.presentedMonthView.potentialSize
+                            self.presentedMonthView.updateInteractiveView()
+                    }
+                } else {
+                    layoutViews(viewsToLayout, toHeight: height)
+                    presentedMonthView.updateInteractiveView()
+                    presentedMonthView.frame.size = presentedMonthView.potentialSize
+                    presentedMonthView.updateInteractiveView()
+                }
+                
+                break
+            }
+        }
+    }
+    
+    func updateLayoutIfNeeded() {
+        if presentedMonthView.potentialSize.height != scrollView.bounds.height {
+            updateHeight(presentedMonthView.potentialSize.height, animated: true)
+        } else if presentedMonthView.frame.size != scrollView.frame.size {
+            presentedMonthView.frame.size = presentedMonthView.potentialSize
+            presentedMonthView.updateInteractiveView()
+        }
     }
 }
 
